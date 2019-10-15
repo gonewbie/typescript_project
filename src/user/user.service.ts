@@ -1,12 +1,13 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, getRepository } from 'typeorm';
+import { Repository, getRepository, DeleteResult } from 'typeorm';
 import { UserEntity } from './user.entity';
 import * as jwt from 'jsonwebtoken';
 import { SECRET } from '../config';
 import { UserRO } from './user.interface';
-import { CreateUserDto } from './dto';
+import { CreateUserDto, LoginUserDto, UpdateUserDto } from './dto';
 import { validate } from 'class-validator';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class UserService {
@@ -14,6 +15,15 @@ export class UserService {
     @InjectRepository(UserEntity)
     private readonly userRepository: Repository<UserEntity>,
   ) {}
+
+  async findOne(loginUserDto: LoginUserDto): Promise<UserEntity> {
+    const findOneOptions = {
+      email: loginUserDto.email,
+      password: crypto.createHmac('sha256', loginUserDto.password).digest('hex'),
+    };
+
+    return await this.userRepository.findOne(findOneOptions);
+  }
 
   async create(dto: CreateUserDto): Promise<UserRO> {
 
@@ -45,6 +55,18 @@ export class UserService {
       const savedUser = await this.userRepository.save(newUser);
       return this.buildUserRO(savedUser);
     }
+  }
+
+  async update(id: number, dto: UpdateUserDto): Promise<UserEntity> {
+    const toUpdate = await this.userRepository.findOne(id);
+    delete toUpdate.password;
+
+    const updated = Object.assign(toUpdate, dto);
+    return await this.userRepository.save(updated);
+  }
+
+  async delete(email: string): Promise<DeleteResult> {
+    return await this.userRepository.delete({ email });
   }
 
   async findById(id: number): Promise<UserRO> {
