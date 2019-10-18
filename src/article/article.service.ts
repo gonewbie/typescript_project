@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ArticleEntity } from './article.entity';
-import { Repository, getRepository } from 'typeorm';
+import { Repository, getRepository, DeleteResult } from 'typeorm';
 import { Comment } from './comment.entity';
 import { UserEntity } from '../user/user.entity';
 import { FollowsEntity } from '../profile/follows.entity';
-import { ArticlesRO, ArticleRO } from './article.interface';
+import { ArticlesRO, ArticleRO, CommentsRO } from './article.interface';
 import { CreateArticleDto } from './dto';
 
 const slug = require('slug');
@@ -62,6 +62,36 @@ export class ArticleService {
     return { articles, articlesCount };
   }
 
+  async findFeed(userId: number, query): Promise<ArticlesRO> {
+    const _follows = await this.followsRepository.find({ followerId: userId });
+    const ids = _follows.map(el => el.followingId);
+
+    const qb = await getRepository(ArticleEntity)
+      .createQueryBuilder('article')
+      .where('article.authorId In (:ids)', { ids });
+
+    qb.orderBy('article.created', 'DESC');
+
+    const articlesCount = await qb.getCount();
+
+    if ('limit' in query) {
+      qb.limit(query.limit);
+    }
+
+    if('offset' in query) {
+      qb.offset(query.offset);
+    }
+
+    const articles = await qb.getMany();
+
+    return { articles, articlesCount };
+  }
+
+  async findOne(where): Promise<ArticleRO> {
+    const article = await this.articleRepository.findOne(where);
+    return { article };
+  }
+
   async addComment(slug: string, commentData): Promise<ArticleRO> {
     let article = await this.articleRepository.findOne({ slug });
 
@@ -72,6 +102,57 @@ export class ArticleService {
 
     await this.commentRepository.save(comment);
     article = await this.articleRepository.save(article);
+    return { article };
+  }
+
+  async deleteComment(slug: string, id: string): Promise<ArticleRO> {
+    let article = await this.articleRepository.findOne({ slug });
+
+    const comment = await this.commentRepository.findOne(id);
+    const deleteIndex = article.comments.findIndex(_comment => _comment.id === comment.id);
+
+    if (deleteIndex >= 0) {
+      const deleteComments = article.comments.splice(deleteIndex, 1);
+      await this.commentRepository.delete(deleteComments[0].id);
+      article = await this.articleRepository.save(article);
+    }
+    return { article };
+  }
+
+  async findComments(slug: string): Promise<CommentsRO> {
+    const article = await this.articleRepository.findOne({slug});
+    return {comments: article.comments};
+  }
+
+  async favorite(id: number, slug: string): Promise<ArticleRO> {
+    let article = await this.articleRepository.findOne({ slug });
+    const user = await this.userRepository.findOne(id);
+
+    const isNewFavorite = user.favorites.findIndex(_article => _article.id === article.id) < 0;
+    if (isNewFavorite) {
+      user.favorites.push(article);
+      article.favoriteCount++;
+
+      await this.userRepository.save(user);
+      article = await this.articleRepository.save(article);
+    }
+
+    return { article };
+  }
+
+  async unFavorite(id: number, slug: string): Promise<ArticleRO> {
+    let article = await this.articleRepository.findOne({ slug });
+    const user = await this.userRepository.findOne(id);
+
+    const deleteIndex = user.favorites.findIndex(_article => _article.id === article.id);
+    if (deleteIndex > 0) {
+      user.favorites.splice(deleteIndex, 1);
+      article.favoriteCount--;
+
+      await this.userRepository.save(user);
+      article = await this.articleRepository.save(article);
+    }
+
     return { article };
   }
 
@@ -96,6 +177,18 @@ export class ArticleService {
     await this.userRepository.save(author);
 
     return newArticle;
+  }
+
+  async update(slug: string, articleData: any): Promise<ArticleRO> {
+    const toUpdate = await this.articleRepository.findOne({ slug });
+    const updated = Object.assign(toUpdate, articleData);
+    const article = await this.articleRepository.save(updated);
+
+    return { article };
+  }
+
+  async delete(slug: string): Promise<DeleteResult> {
+    return await this.articleRepository.delete({ slug });
   }
 
   slugify(title: string) {
