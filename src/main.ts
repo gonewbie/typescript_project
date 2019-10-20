@@ -3,7 +3,7 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
-  const appOptions = {cors: true};
+  const appOptions = { cors: true, logger: console };
   const app = await NestFactory.create(AppModule, appOptions);
   app.setGlobalPrefix('api');
 

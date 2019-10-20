@@ -7,8 +7,7 @@ import { UserEntity } from '../user/user.entity';
 import { FollowsEntity } from '../profile/follows.entity';
 import { ArticlesRO, ArticleRO, CommentsRO } from './article.interface';
 import { CreateArticleDto } from './dto';
-
-const slug = require('slug');
+import slug from 'slug';
 
 @Injectable()
 export class ArticleService {
@@ -35,7 +34,7 @@ export class ArticleService {
     }
 
     if ('author' in query) {
-      const author = await this.userRepository.findOne({ username: query.favorited });
+      const author = await this.userRepository.findOne({ username: query.author });
       qb.andWhere('article.authorId = :id', { id: author.id });
     }
 
@@ -68,7 +67,11 @@ export class ArticleService {
 
     const qb = await getRepository(ArticleEntity)
       .createQueryBuilder('article')
-      .where('article.authorId In (:ids)', { ids });
+      .leftJoinAndSelect('article.author', 'author');
+
+    if (_follows.length) {
+      qb.where('article.authorId In (:ids)', { ids });
+    }
 
     qb.orderBy('article.created', 'DESC');
 
@@ -87,8 +90,8 @@ export class ArticleService {
     return { articles, articlesCount };
   }
 
-  async findOne(where): Promise<ArticleRO> {
-    const article = await this.articleRepository.findOne(where);
+  async findOne(slug: object): Promise<ArticleRO> {
+    const article = await this.articleRepository.findOne({ where: slug, relations: ['author'] });
     return { article };
   }
 
