@@ -7,10 +7,11 @@ import { TagEntity } from './tag.entity';
 export class TagService {
   constructor(
     @InjectRepository(TagEntity)
-    private readonly tagRepository: Repository<TagEntity>
+    private readonly tagRepository: Repository<TagEntity>,
   ) {}
 
-  async findAll(): Promise<TagEntity[]> {
-    return await this.tagRepository.find();
+  async findAll(): Promise<object> {
+    const tags = await this.tagRepository.find();
+    return { 'tags': tags.map(x => x.tag) };
   }
 }

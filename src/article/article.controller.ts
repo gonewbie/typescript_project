@@ -41,6 +41,7 @@ export class ArticleController {
   @ApiResponse({ status: 403, description: 'Forbidden.' })
   @Post()
   async create(@User('id') userId: number, @Body('article') articleData: CreateArticleDto) {
+    console.log(articleData);
     return await this.articleService.create(userId, articleData);
   }
 
